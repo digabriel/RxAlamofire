@@ -412,32 +412,35 @@ extension Reactive where Base: SessionManager {
 
     - returns: A generic observable of created data request
     */
-    func request<R: RxAlamofireRequest>(_ createRequest: @escaping (SessionManager) throws -> R) -> Observable<R> {
+    func request<R: RxAlamofireRequest>(_ createRequest: @escaping (SessionManager, @escaping (R) -> Void) -> Void) -> Observable<R> {
         return Observable.create { observer -> Disposable in
-            let request: R
+            var request: R?
             do {
-                request = try createRequest(self.base)
-                observer.on(.next(request))
-                request.responseWith(completionHandler: { (response) in
-                    if let error = response.error {
-                        observer.on(.error(error))
-                    } else {
-                        observer.on(.completed)
-                    }
-                })
+                createRequest(self.base) { newRequest in
+                    request = newRequest
 
-                if !self.base.startRequestsImmediately {
-                    request.resume()
+                    observer.on(.next(newRequest))
+                    newRequest.responseWith(completionHandler: { (response) in
+                        if let error = response.error {
+                            observer.on(.error(error))
+                        } else {
+                            observer.on(.completed)
+                        }
+                    })
+
+                    if !self.base.startRequestsImmediately {
+                        newRequest.resume()
+                    }
                 }
 
                 return Disposables.create {
-                    request.cancel()
+                    request?.cancel()
                 }
             }
-            catch let error {
-                observer.on(.error(error))
-                return Disposables.create()
-            }
+//            catch let error {
+//                observer.on(.error(error))
+//                return Disposables.create()
+//            }
         }
     }
 
@@ -701,6 +704,74 @@ extension Reactive where Base: SessionManager {
                        urlRequest: URLRequestConvertible) -> Observable<UploadRequest> {
         return request { manager in
             return manager.upload(stream, with: urlRequest)
+        }
+    }
+
+    // MARK: Multipart upload
+
+    /**
+     Returns an observable of an `UploadRequest` using the `url`, `method` and `headers`,
+     and a body that contains `multipart/form-data` content encoded from the input data,
+     provided by the `multipartFormData` parameter.
+
+     It is important to understand the memory implications of uploading `MultipartFormData`. If the cummulative
+     payload is small, encoding the data in-memory and directly uploading to a server is the by far the most
+     efficient approach. However, if the payload is too large, encoding the data in-memory could cause your app to
+     be terminated. Larger payloads must first be written to disk using input and output streams to keep the memory
+     footprint low, then the data can be uploaded as a stream from the resulting file. Streaming from disk MUST be
+     used for larger payloads such as video content.
+
+     The `encodingMemoryThreshold` parameter allows Alamofire to automatically determine whether to encode in-memory
+     or stream from disk. If the content length of the `MultipartFormData` is below the `encodingMemoryThreshold`,
+     encoding takes place in-memory. If the content length exceeds the threshold, the data is streamed to disk
+     during the encoding process. Then the result is uploaded as data or as a stream depending on which encoding
+     technique was used.
+
+     - parameter multipartFormData:       The closure used to append body parts to the `MultipartFormData`.
+     - parameter encodingMemoryThreshold: The encoding memory threshold in bytes.
+                                          `multipartFormDataEncodingMemoryThreshold` by default.
+     - parameter url:                     The URL.
+     - parameter method:                  The HTTP method. `.post` by default.
+     - parameter headers:                 The HTTP headers. `nil` by default.
+    */
+    public func upload(multipartFormData data: @escaping (MultipartFormData) -> Void,
+                       usingThreshold encodingMemoryThreshold: UInt64 = SessionManager.multipartFormDataEncodingMemoryThreshold,
+                       to url: URLConvertible,
+                       method: HTTPMethod = .post,
+                       headers: HTTPHeaders = [:]) -> Observable<UploadRequest> {
+        return request { manager, requestClosure in
+            manager.upload(multipartFormData: data,
+                           usingThreshold: encodingMemoryThreshold,
+                           to: url,
+                           method: method,
+                           headers: headers) {
+                            switch $0 {
+                            case let .success(request, _, _):
+                                requestClosure(request)
+                            case .failure:
+                                () // probably need to handle the error with a result type or something
+                            }
+            }
+            fatalError()
+        }
+
+        let manager = base
+        return Observable.create { observer in
+            manager.upload(multipartFormData: data,
+                           usingThreshold: encodingMemoryThreshold,
+                           to: url,
+                           method: method,
+                           headers: headers) {
+                switch $0 {
+                case .failure(let error):
+                    observer.onError(error)
+                case .success(let request, _, _):
+                    observer.onNext(request)
+                    observer.onCompleted()
+                }
+            }
+
+            return Disposables.create()
         }
     }
 
