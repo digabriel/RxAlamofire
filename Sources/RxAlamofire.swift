@@ -464,7 +464,7 @@ extension Reactive where Base: SessionManager {
     )
         -> Observable<DataRequest>
     {
-        return request { manager in
+        return request { manager, _  in
             return manager.request(url,
                                    method: method,
                                    parameters: parameters,
@@ -486,7 +486,7 @@ extension Reactive where Base: SessionManager {
     public func request(urlRequest: URLRequestConvertible)
         -> Observable<DataRequest>
     {
-        return request { manager in
+        return request { manager, _ in
             return manager.request(urlRequest)
         }
     }
@@ -673,7 +673,7 @@ extension Reactive where Base: SessionManager {
      */
     public func upload(_ file: URL, urlRequest: URLRequestConvertible) -> Observable<UploadRequest> {
 
-        return request { manager in
+        return request { manager, _ in
             return manager.upload(file, with: urlRequest)
         }
     }
@@ -687,7 +687,7 @@ extension Reactive where Base: SessionManager {
      - returns: The observable of `UploadRequest` for the created request.
      */
     public func upload(_ data: Data, urlRequest: URLRequestConvertible) -> Observable<UploadRequest> {
-        return request { manager in
+        return request { manager, _ in
             return manager.upload(data, with: urlRequest)
         }
     }
@@ -702,7 +702,7 @@ extension Reactive where Base: SessionManager {
      */
     public func upload(_ stream: InputStream,
                        urlRequest: URLRequestConvertible) -> Observable<UploadRequest> {
-        return request { manager in
+        return request { manager, _ in
             return manager.upload(stream, with: urlRequest)
         }
     }
@@ -785,7 +785,7 @@ extension Reactive where Base: SessionManager {
      */
     public func download(_ urlRequest: URLRequestConvertible,
                          to destination: @escaping DownloadRequest.DownloadFileDestination) -> Observable<DownloadRequest> {
-        return request { manager in
+        return request { manager, _ in
             return manager.download(urlRequest, to: destination)
         }
     }
@@ -802,7 +802,7 @@ extension Reactive where Base: SessionManager {
     */
     public func download(resumeData: Data,
                          to destination: @escaping DownloadRequest.DownloadFileDestination) -> Observable<DownloadRequest> {
-        return request { manager in
+        return request { manager, _ in
             return manager.download(resumingWith: resumeData, to: destination)
         }
     }
